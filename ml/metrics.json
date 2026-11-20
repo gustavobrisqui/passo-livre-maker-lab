@@ -1,0 +1,81 @@
+{
+  "accuracy": 0.9947222222222222,
+  "per_class_f1": {
+    "LIVRE": 0.985,
+    "OBSTACULO": 0.9916666666666667,
+    "PESSOA": 0.9916666666666667,
+    "BURACO": 1.0,
+    "DEGRAU": 1.0,
+    "RAMPA": 1.0
+  },
+  "confusion_matrix": [
+    [
+      591,
+      5,
+      4,
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      595,
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      5,
+      0,
+      595,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      600,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      600,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      600
+    ]
+  ],
+  "classes": [
+    "LIVRE",
+    "OBSTACULO",
+    "PESSOA",
+    "BURACO",
+    "DEGRAU",
+    "RAMPA"
+  ],
+  "features": [
+    "front_mean",
+    "front_min",
+    "front_std",
+    "front_delta",
+    "floor_mean",
+    "floor_std",
+    "pitch_abs_mean"
+  ],
+  "scenario_checks_passed": true,
+  "n_windows": 18000,
+  "nbr9050_ramp_limit_deg": 4.76
+}

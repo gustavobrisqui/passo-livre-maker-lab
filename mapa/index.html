@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passo Livre · Mapa do robô</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#0f172a; --panel:#111827; --text:#f8fafc; --muted:#cbd5e1; --line:#334155;
+          --obst:#f97316; --buraco:#ef4444; --degrau:#a855f7; --rampa:#eab308; --robo:#22c55e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text);
+         display:grid; grid-template-columns: 1fr 360px; height:100vh; }
+  #map { height:100%; }
+  aside { background:var(--panel); border-left:1px solid var(--line); padding:16px; overflow:auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .status { display:flex; gap:8px; align-items:center; margin:12px 0; font-size:14px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#64748b; }
+  .dot.on { background:var(--robo); }
+  .robot { border:1px solid var(--line); border-radius:8px; padding:10px; font-size:14px; margin-bottom:12px; }
+  ul { list-style:none; padding:0; margin:0; }
+  li { border-left:4px solid var(--line); padding:8px 10px; margin-bottom:8px; background:#0b1220; border-radius:4px; }
+  li strong { display:block; }
+  .legend span { display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-size:13px; }
+  .legend i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  label { font-size:13px; color:var(--muted); }
+  input { width:100%; padding:6px; background:#0b1220; color:var(--text); border:1px solid var(--line); border-radius:4px; }
+  @media (max-width: 760px) { body { grid-template-columns:1fr; grid-template-rows: 55vh 1fr; } aside { border-left:0; } }
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="Mapa de barreiras detectadas pelo robô"></div>
+<aside>
+  <h1>Passo Livre · Robô</h1>
+  <p class="muted">Barreiras detectadas pelo robô de vistoria em tempo real (MQTT). Relatos chegam como <em>pendente de validação</em>.</p>
+  <div class="status"><span id="conn-dot" class="dot"></span><span id="conn">Conectando ao broker…</span></div>
+  <label for="topic">Tópico base</label>
+  <input id="topic" value="passolivre/gs2026-4es">
+  <div class="robot" id="robot" aria-live="polite" style="margin-top:12px">Aguardando telemetria do robô…</div>
+  <div class="legend">
+    <span><i style="background:var(--obst)"></i>Obstáculo</span>
+    <span><i style="background:var(--buraco)"></i>Buraco</span>
+    <span><i style="background:var(--degrau)"></i>Degrau</span>
+    <span><i style="background:var(--rampa)"></i>Rampa</span>
+  </div>
+  <h2 style="font-size:16px">Relatos (<span id="count">0</span>)</h2>
+  <ul id="list" aria-live="polite"></ul>
+</aside>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+const COLORS = { OBSTACULO_CALCADA:'#f97316', BURACO:'#ef4444', DEGRAU_SEM_RAMPA:'#a855f7', RAMPA_INCLINACAO_EXCESSIVA:'#eab308' };
+const LABELS = { OBSTACULO_CALCADA:'Obstáculo na calçada', BURACO:'Buraco / desnível', DEGRAU_SEM_RAMPA:'Degrau sem rampa', RAMPA_INCLINACAO_EXCESSIVA:'Rampa acima de 8,33 % (NBR 9050)' };
+
+const map = L.map('map').setView([-23.56210, -46.65534], 18);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '© OpenStreetMap' }).addTo(map);
+L.polyline([[-23.561224,-46.656248],[-23.562969,-46.654435]], { color:'#38bdf8', dashArray:'6 6' }).addTo(map)
+  .bindTooltip('Trecho vistoriado (simulado)');
+const robot = L.circleMarker([-23.561224,-46.656248], { radius:9, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1 }).addTo(map);
+
+const seen = new Set();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function addReport(r) {
+  if (!r.relato_id || seen.has(r.relato_id)) return;
+  seen.add(r.relato_id);
+  const color = COLORS[r.tipo] || '#94a3b8';
+  const m = r.medidas || {};
+  const html = `<strong>${esc(LABELS[r.tipo] || r.tipo)}</strong><br>Confiança da IA: ${Math.round((r.confianca||0)*100)}%<br>
+    Frente ${esc(m.frente_cm)} cm · Piso ${esc(m.piso_cm)} cm · Inclinação ${esc(m.inclinacao_pct)} %<br>
+    <small>${esc(r.relato_id)} · ${esc(r.status)}</small>`;
+  L.circleMarker([r.lat, r.lon], { radius:8, color, fillColor:color, fillOpacity:.85 }).addTo(map).bindPopup(html);
+  const li = document.createElement('li');
+  li.style.borderLeftColor = color;
+  li.innerHTML = `<strong>${esc(LABELS[r.tipo] || r.tipo)}</strong>
+    <span class="muted">${Math.round((r.confianca||0)*100)}% · ${esc(r.posicao_m)} m no trecho · ${esc(r.ts || 'agora')}</span>`;
+  li.tabIndex = 0;
+  li.onclick = li.onkeydown = e => { if (e.type === 'click' || e.key === 'Enter') map.setView([r.lat, r.lon], 20); };
+  document.getElementById('list').prepend(li);
+  document.getElementById('count').textContent = seen.size;
+}
+
+function updateRobot(t) {
+  robot.setLatLng([t.lat, t.lon]);
+  document.getElementById('robot').innerHTML =
+    `<strong>${esc(t.device_id)}</strong> · ${esc(t.estado)}<br>IA: ${esc(t.classe)} (${Math.round((t.confianca||0)*100)}%)<br>
+     Frente ${esc(t.frente_cm)} cm · Piso ${esc(t.piso_cm)} cm · ${esc(t.inclinacao_graus)}°<br>
+     Posição ${esc(t.posicao_m)} m · enviados ${esc(t.enviados)} · fila ${esc(t.fila)}`;
+}
+
+let client;
+function connect() {
+  const base = document.getElementById('topic').value.trim();
+  if (client) client.end(true);
+  client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', { clientId: 'passolivre-mapa-' + Math.random().toString(16).slice(2, 8) });
+  client.on('connect', () => {
+    document.getElementById('conn').textContent = 'Conectado · ' + base;
+    document.getElementById('conn-dot').classList.add('on');
+    client.subscribe([base + '/relatos', base + '/telemetria/+']);
+  });
+  client.on('close', () => { document.getElementById('conn').textContent = 'Desconectado, tentando de novo…'; document.getElementById('conn-dot').classList.remove('on'); });
+  client.on('message', (topic, payload) => {
+    let msg; try { msg = JSON.parse(payload.toString()); } catch { return; }
+    if (topic.endsWith('/relatos')) addReport(msg); else updateRobot(msg);
+  });
+}
+document.getElementById('topic').addEventListener('change', connect);
+connect();
+</script>
+</body>
+</html>

@@ -12,9 +12,9 @@
 | Matheus Brisqui Martinez | 97892 |
 | Guilherme Resende Bezerra | 98508 |
 
-📹 **Vídeo demonstrativo (até 6 min):** _link do YouTube_
+📹 **Vídeo demonstrativo:** https://youtu.be/JBc1vrlSQeY
 🔌 **Simulação no Wokwi:** <https://wokwi.com/projects/481129630702885889>
-🗺️ **Mapa ao vivo:** `mapa/index.html` (abrir no navegador ou GitHub Pages)
+🗺️ **Mapa ao vivo:** `mapa/index.html`
 
 ---
 
